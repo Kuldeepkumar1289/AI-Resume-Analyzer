@@ -1,6 +1,6 @@
 from django.contrib import admin
 from django.urls import path
-from engine.views import upload_resume, download_report, history
+from engine.views import upload_resume, download_report, history, signup
 from django.contrib.auth import views as auth_views
 
 urlpatterns = [
@@ -13,6 +13,10 @@ urlpatterns = [
     path('download-report/', download_report, name='download_report'),
 
     path('login/', auth_views.LoginView.as_view(template_name='login.html'), name='login'),
+    
+    path('signup/', signup, name='signup'),
 
     path('logout/', auth_views.LogoutView.as_view(), name='logout'),
+
+    
 ]

@@ -1,3 +1,5 @@
+from django.contrib.auth.models import User
+from django.shortcuts import redirect
 import json
 import re
 import spacy
@@ -31,7 +33,12 @@ from .resume_tips import get_resume_tips
 # Setup
 nlp = spacy.load("en_core_web_sm")
 # Note: In production, move the API key to an environment variable or settings.py
-client = OpenAI()
+import os
+from openai import OpenAI
+
+client = OpenAI(
+    api_key=os.environ.get(OPENAI_API_KEY)
+)
 
 TECH_KEYWORDS = ["python", "java", "sql", "html", "css", "javascript", "django", "react", "machine learning", "data science"]
 
@@ -158,3 +165,24 @@ def download_report(request):
     p.showPage()
     p.save()
     return response
+
+def signup(request):
+    if request.method == "POST":
+        username = request.POST.get("username")
+        email = request.POST.get("email")
+        password = request.POST.get("password")
+
+        if User.objects.filter(username=username).exists():
+            return render(request, "signup.html", {
+                "error": "Username already exists"
+            })
+
+        User.objects.create_user(
+            username=username,
+            email=email,
+            password=password
+        )
+
+        return redirect("login")
+
+    return render(request, "signup.html")
