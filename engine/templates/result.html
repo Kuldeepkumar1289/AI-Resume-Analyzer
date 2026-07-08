@@ -1,0 +1,213 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AI Resume Dashboard</title>
+    
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+
+    <style>
+        body {
+            background: linear-gradient(to right, hsl(206, 83%, 86%), #ffffff);
+            min-height: 100vh;
+        }
+        .custom-card {
+            background: white;
+            padding: 20px;
+            border-radius: 10px;
+            box-shadow: 0 4px 10px rgba(0,0,0,0.1);
+            height: 100%;
+        }
+    </style>
+</head>
+
+<body>
+
+<nav class="navbar navbar-expand-lg navbar-dark bg-dark mb-4">
+    <div class="container">
+        <a class="navbar-brand" href="/">🚀 AI Resume Analyzer</a>
+        <div class="d-flex">
+            <a class="btn btn-outline-light me-2" href="/">Upload</a>
+            <a class="btn btn-outline-light" href="/history/">History</a>
+        </div>
+    </div>
+</nav>
+
+<div class="container">
+    <h1 class="text-center mb-4" style="color:#333;">AI Resume Analysis Result</h1>
+
+    <div class="card p-3 mb-4 shadow-sm">
+        <div class="d-flex justify-content-between align-items-center">
+            <h4>Candidate Name: <span class="text-primary">{{ name }}</span></h4>
+            <a href="/download-report/?name={{name}}&career={{career}}{% for skill in skills %}&skills={{skill}}{% endfor %}" 
+               class="btn btn-success">
+               Download AI Report (PDF)
+            </a>
+        </div>
+    </div>
+
+    <div class="row g-4">
+        <div class="col-md-6">
+            <div class="custom-card">
+                <h4>Detected Skills</h4>
+                {% for skill in skills %}
+                    <span class="badge bg-primary m-1">{{ skill }}</span>
+                {% endfor %}
+            </div>
+        </div>
+
+        <div class="col-md-6">
+            <div class="custom-card">
+                <h4>Recommended Career</h4>
+                <h5 class="text-success">{{ career }}</h5>
+            </div>
+        </div>
+
+        <div class="col-md-6">
+            <div class="custom-card">
+                <h4>Missing Skills (General)</h4>
+                {% for skill in missing_skills %}
+                    <span class="badge bg-danger m-1">{{ skill }}</span>
+                {% endfor %}
+            </div>
+        </div>
+
+        <div class="col-md-6">
+            <div class="custom-card">
+                <h4>ATS Resume Score</h4>
+                <div class="progress" style="height: 30px; border-radius: 20px;">
+                    <div class="progress-bar bg-success" role="progressbar" 
+                         style="width: {{ ats_score }}%;" 
+                         aria-valuenow="{{ ats_score }}" aria-valuemin="0" aria-valuemax="100">
+                        {{ ats_score }}%
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="col-md-12">
+            <div class="custom-card">
+                <h4>Skill Analysis Chart</h4>
+                <div style="max-height: 400px;">
+                    <canvas id="skillChart"></canvas>
+                </div>
+            </div>
+        </div>
+
+        <div class="col-md-6">
+            <div class="custom-card">
+                <h4>Career Roadmap</h4>
+                <ol>
+                    {% for step in roadmap %}
+                        <li>{{ step }}</li>
+                    {% endfor %}
+                </ol>
+            </div>
+        </div>
+
+        <div class="col-md-6">
+            <div class="custom-card">
+                <h4>Improvement Suggestions</h4>
+                <ul>
+                    {% for tip in tips %}
+                        <li>{{ tip }}</li>
+                    {% endfor %}
+                </ul>
+            </div>
+        </div>
+
+        <div class="col-md-12">
+            <div class="custom-card">
+                <h3>Job Match Score: {{ match_score }}%</h3>
+                <p style="color:orange;">⚠ Improve your skills to increase job match</p>
+                <div class="row">
+                    <div class="col-md-6">
+                        <h5 class="text-success">Matched Skills</h5>
+                        <ul>
+                            {% for skill in matched_skills %}
+                                <li class="text-success">{{ skill }}</li>
+                            {% endfor %}
+                        </ul>
+                    </div>
+                    <div class="col-md-6">
+                        <h5 class="text-danger">Missing for Job</h5>
+                        <ul>
+                            {% for skill in missing_job_skills %}
+                                <li class="text-danger">{{ skill }}</li>
+                            {% endfor %}
+                        </ul>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="col-md-6">
+            <div class="custom-card">
+                <h4>Recommended Courses</h4>
+                <ul>
+                    {% for course in courses %}
+                        <li>{{ course.skill }} → <a href="{{ course.course }}" target="_blank">Learn Here</a></li>
+                    {% endfor %}
+                </ul>
+                {% if courses %}
+                <ul>
+                  {% for course in courses %}
+                    <li>{{ course }}</li>
+                  {% endfor %}
+                </ul>
+              {% else %}
+                <p>No courses found. Try adding more skills.</p>
+              {% endif %}
+            </div>
+        </div>
+
+        <div class="col-md-6">
+            <div class="custom-card">
+                <h4>Recommended Jobs</h4>
+                <ul>
+                    {% for job in jobs %}
+                        <li>{{ job }}</li>
+                    {% endfor %}
+                </ul>
+            </div>
+        </div>
+    </div>
+</div>
+
+<footer class="mt-5 p-4 bg-dark text-white text-center">
+    <p>&copy; 2026 AI Resume Analyzer</p>
+</footer>
+
+<script>
+    // Combined Skill Chart
+    const ctx = document.getElementById("skillChart").getContext("2d");
+    new Chart(ctx, {
+        type: "bar",
+        data: {
+            labels: ["Detected Skills", "Missing Skills", "ATS Score", "Job Match"],
+            datasets: [{
+                label: "Resume Metrics",
+                data: [
+                    {{ skills|length }}, 
+                    {{ missing_skills|length }}, 
+                    {{ ats_score }}, 
+                    {{ match_score }}
+                ],
+                backgroundColor: ['#0d6efd', '#dc3545', '#198754', '#ffc107'],
+                borderWidth: 1
+            }]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            scales: {
+                y: { beginAtZero: true }
+            }
+        }
+    });
+</script>
+
+</body>
+</html>
