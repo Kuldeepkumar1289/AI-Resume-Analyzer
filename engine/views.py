@@ -31,14 +31,21 @@ from .ats_score import calculate_ats_score
 from .resume_tips import get_resume_tips
 
 # Setup
-nlp = spacy.load("en_core_web_sm")
-# Note: In production, move the API key to an environment variable or settings.py
 import os
 from openai import OpenAI
 
+# 1. OpenAI Client setup
 client = OpenAI(
     api_key=os.environ.get("OPENAI_API_KEY")
 )
+
+# 2. SpaCy Model ko YAHAN (Global level par) load karein, kisi function ke andar nahi!
+try:
+    nlp = spacy.load("en_core_web_sm")
+except OSError:
+    # Agar model cached na ho toh safely handle karne ke liye
+    nlp = spacy.blank("en") 
+
 
 TECH_KEYWORDS = ["python", "java", "sql", "html", "css", "javascript", "django", "react", "machine learning", "data science"]
 
