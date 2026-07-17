@@ -1,9 +1,10 @@
 import json
+import time
+
 from google import genai
 from django.conf import settings
 
 
-# Gemini Client
 client = genai.Client(
     api_key=settings.GEMINI_API_KEY
 )
@@ -49,10 +50,7 @@ Return ONLY valid JSON in exactly this structure:
         "weaknesses": []
     }},
     "roadmap": [],
-    "recommended_learning_skills": []
-
-    ],
-    "recommended_jobs": [],
+    "recommended_learning_skills": [],
     "improvement_suggestions": [],
     "resume_rewrite": {{
         "professional_summary": "",
@@ -61,36 +59,60 @@ Return ONLY valid JSON in exactly this structure:
 }}
 
 Rules:
-
-For recommended_courses:
-
-- In recommended_learning_skills, return only skills that the candidate should learn.
-- Do not generate URLs.
-- Do not generate course names.
+- Analyze any career field.
+- Do not assume the candidate is from IT.
+- ATS score must be between 0 and 100.
+- Do not invent skills not present in the resume.
+- Return valid JSON only.
 """
 
-    try:
+    # Primary + fallback models
+    models = [
+        "gemini-3.5-flash",
+        "gemini-3-flash-preview",
+        "gemini-2.5-flash-lite"
+    ]
 
-        response = client.models.generate_content(
-            model="gemini-3.5-flash",
-            contents=prompt
-        )
+    for model in models:
 
-        response_text = response.text.strip()
+        for attempt in range(2):
 
-        # Remove Markdown JSON wrapper if Gemini adds it
-        if response_text.startswith("```json"):
-            response_text = response_text[7:]
+            try:
 
-        if response_text.endswith("```"):
-            response_text = response_text[:-3]
+                print(
+                    f"Trying model: {model} | Attempt: {attempt + 1}"
+                )
 
-        response_text = response_text.strip()
+                response = client.models.generate_content(
+                    model=model,
+                    contents=prompt
+                )
 
-        return json.loads(response_text)
+                response_text = response.text.strip()
 
-    except Exception as e:
+                if response_text.startswith("```json"):
+                    response_text = response_text.replace(
+                        "```json",
+                        "",
+                        1
+                    )
 
-        print("AI ANALYSIS ERROR:", e)
+                if response_text.endswith("```"):
+                    response_text = response_text[:-3]
 
-        return None
+                response_text = response_text.strip()
+
+                return json.loads(response_text)
+
+            except Exception as e:
+
+                print(
+                    f"AI ERROR [{model}] "
+                    f"Attempt {attempt + 1}: {e}"
+                )
+
+                time.sleep(2)
+
+    print("ALL GEMINI MODELS FAILED")
+
+    return None
