@@ -67,10 +67,11 @@ Rules:
 """
 
     # Primary + fallback models
-    models = [
-        "gemini-3.5-flash",
-        "gemini-3-flash-preview",
-        "gemini-2.5-flash-lite"
+    MODELS = [
+    "gemini-2.5-flash-lite",
+    "gemini-2.0-flash-lite",
+    "gemini-2.5-flash",
+    "gemini-3.5-flash",
     ]
 
     for model in models:
