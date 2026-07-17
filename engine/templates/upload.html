@@ -83,13 +83,11 @@ function validateAndSubmit(form) {
 
     let fileName = file.name.toLowerCase();
 
-    // Dono formats check karne ke liye logic
     if (!(fileName.endsWith(".pdf") || fileName.endsWith(".docx"))) {
         alert("Only PDF or DOCX files allowed!");
         return false;
     }
 
-    // Loader activate karo aur button disable karo
     document.getElementById("loadingText").style.display = "block";
     let btn = document.getElementById("submitBtn");
     btn.disabled = true;

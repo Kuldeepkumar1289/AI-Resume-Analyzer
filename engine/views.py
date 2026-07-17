@@ -1,238 +1,1069 @@
 from django.contrib.auth.models import User
-from django.shortcuts import redirect, render
-import json
-import re
-import spacy
-import os
+from django.shortcuts import redirect, render, get_object_or_404
 from django.http import HttpResponse
 from django.contrib.auth.decorators import login_required
-from django.conf import settings
 
 from reportlab.pdfgen import canvas
 
-# Custom Module Imports
 from .models import UserProfile
-from .resume_rewriter import rewrite_resume
-from .ai_feedback import generate_feedback
+from .resume_reader import extract_text_from_resume
+from .ai_analyzer import analyze_resume_with_ai
 from .course_recommender import recommend_courses
 from .job_recommender import recommend_jobs
-from .job_matcher import match_resume_with_job
-from .resume_reader import extract_text_from_resume
-from .skill_detector import detect_skills
-from .career_predictor import predict_career
-from .skill_gap import find_missing_skills
-from .roadmap_generator import generate_roadmap
-from .ats_score import calculate_ats_score
-from .resume_tips import get_resume_tips
-
-from google import genai
-
-# client = genai.Client(
-#     api_key="AQ.Ab8RN6KTqnguI6mjhkS7e7iy8J21roNMh4b5rA-f97Z9N1P8JQ"
-# )
-
-# Read the key securely from local environment configuration
-client = genai.Client(
-    api_key=os.environ.get("GEMINI_API_KEY")
-)
 
 
-try:
-    nlp = spacy.load("en_core_web_sm")
-except OSError:
-    nlp = spacy.blank("en") 
+# HELPER FUNCTION
 
-def clean_and_parse_json(text_content):
+def ensure_list(data):
     """
-    Sanitizes LLM outputs by isolating and parsing structural JSON components.
+    Ensures that AI response values are always lists.
     """
-    if not text_content:
-        return None
-    try:
-        match = re.search(r'\{.*\}', text_content, re.DOTALL)
-        if match:
-            return json.loads(match.group(0))
-        return json.loads(text_content.strip())
-    except Exception:
-        return None
 
-def analyze_with_ai(resume_text, job_description):
-    """
-    Performs precise contextual validation matching using Gemini 2.5 LLM.
-    """
-    if not job_description.strip():
-        return None
-        
-    prompt = f"""
-    Analyze the resume against the targeted job description.
-    Resume Content: {resume_text}
-    Job Description: {job_description}
-
-    Return strictly valid JSON only:
-    {{
-      "matching_skills": ["list", "of", "exact", "matching", "skills"],
-      "missing_skills": ["list", "of", "skills", "required", "by", "jd", "but", "missing"],
-      "score": 75,
-      "feedback": "Constructive professional feedback summary."
-    }}
-    """
-    try:
-        response = client.models.generate_content(
-            model="gemini-2.5-flash",
-            contents=prompt
-        )
-        return clean_and_parse_json(response.text)
-    except Exception:
-        return None
-
-def ensure_list(data_input, fallback_item="General Skills"):
-    """
-    Guarantees structural list compliance for stable template iterative parsing.
-    """
-    if not data_input:
+    if not data:
         return []
-    if isinstance(data_input, list):
-        return [str(item).strip() for item in data_input if str(item).strip()]
-    if isinstance(data_input, str):
-        return [item.strip() for item in data_input.split(",") if item.strip()]
-    return [fallback_item]
+
+    if isinstance(data, list):
+        return data
+
+    if isinstance(data, str):
+        return [data]
+
+    return []
+
+
+# UPLOAD AND ANALYZE RESUME
 
 @login_required
 def upload_resume(request):
+
     if request.method == "POST":
-        name = request.POST.get("name")
-        email = request.POST.get("email")
-        branch = request.POST.get("branch")
-        cgpa = request.POST.get("cgpa")
-        resume_file = request.FILES.get("resume")
-        job_description = request.POST.get("job_description") or ""
 
-        if not resume_file:
-            return render(request, "upload.html", {"error": "No resume file uploaded."})
+        # 1. GET FORM DATA
 
-        profile = UserProfile.objects.create(
-            user=request.user, name=name, email=email, branch=branch, cgpa=cgpa, resume=resume_file
+        name = request.POST.get(
+            "name",
+            ""
+        ).strip()
+
+        email = request.POST.get(
+            "email",
+            ""
+        ).strip()
+
+        branch = request.POST.get(
+            "branch",
+            ""
+        ).strip()
+
+        cgpa = request.POST.get(
+            "cgpa"
+        ) or None
+
+        resume_file = request.FILES.get(
+            "resume"
         )
 
-        # 1. Text Parsing & Extraction
-        raw_text = extract_text_from_resume(profile.resume.path)
-        detected_skills = ensure_list(detect_skills(raw_text))
-        
-        if not detected_skills:
-            detected_skills = ["Python", "Java", "Django", "SQL", "MySQL", "Git", "JavaScript", "HTML", "CSS"]
-            
-        detected_skills_lower = [s.lower().strip() for s in detected_skills]
+        # 2. CHECK RESUME
 
-        # 2. Predictive Modules Execution
-        career = predict_career(detected_skills) or "Backend Developer"
-        
-        # 3. Dynamic Job Matching Engine
-        matched_skills = []
-        missing_job_skills = []
-        match_score = 70
+        if not resume_file:
 
-        if job_description.strip():
-            gpt_data = analyze_with_ai(raw_text, job_description)
-            if gpt_data:
-                raw_matches = ensure_list(gpt_data.get("matching_skills", []))
-                raw_misses = ensure_list(gpt_data.get("missing_skills", []))
-                match_score = gpt_data.get("score", 70)
-                
-                matched_skills = [s for s in detected_skills if s.lower().strip() in [m.lower().strip() for m in raw_matches]]
-                missing_job_skills = [s for s in raw_misses if s.lower().strip() not in detected_skills_lower]
+            return render(
+
+                request,
+
+                "upload.html",
+
+                {
+                    "error":
+                    "Please upload your resume."
+                }
+
+            )
+
+        # 3. SAVE RESUME
+
+        profile = UserProfile.objects.create(
+
+            user=request.user,
+
+            name=name,
+
+            email=email,
+
+            branch=branch,
+
+            cgpa=cgpa,
+
+            resume=resume_file
+
+        )
+
+        # 4. EXTRACT RESUME TEXT
+
+        raw_text = extract_text_from_resume(
+
+            profile.resume.path
+
+        )
+
+
+        if not raw_text:
+
+            return render(
+
+                request,
+
+                "upload.html",
+
+                {
+
+                    "error":
+                    "Could not extract text from the resume."
+
+                }
+
+            )
+
+        # 5. AI ANALYSIS
+
+        ai_data = analyze_resume_with_ai(
+
+            raw_text
+
+        )
+
+
+        if not ai_data:
+
+            return render(
+
+                request,
+
+                "upload.html",
+
+                {
+
+                    "error":
+                    "AI analysis failed. Please try again."
+
+                }
+
+            )
+
+        # 6. RESUME SUMMARY
+
+        resume_summary = ai_data.get(
+
+            "resume_summary",
+
+            "Resume analysis completed successfully."
+
+        )
+
+        # 7. CANDIDATE PROFILE
+
+        candidate_profile = ai_data.get(
+
+            "candidate_profile",
+
+            {}
+
+        )
+
+        # 8. SKILLS
+
+        skills_data = ai_data.get(
+
+            "skills",
+
+            {}
+
+        )
+
+
+        technical_skills = ensure_list(
+
+            skills_data.get(
+
+                "technical",
+
+                []
+
+            )
+
+        )
+
+
+        soft_skills = ensure_list(
+
+            skills_data.get(
+
+                "soft",
+
+                []
+
+            )
+
+        )
+
+
+        tools = ensure_list(
+
+            skills_data.get(
+
+                "tools",
+
+                []
+
+            )
+
+        )
+
+
+        domain_skills = ensure_list(
+
+            skills_data.get(
+
+                "domain",
+
+                []
+
+            )
+
+        )
+
+
+        # Combine all skills
+
+        detected_skills = (
+
+            technical_skills
+
+            + soft_skills
+
+            + tools
+
+            + domain_skills
+
+        )
+
+
+        # Remove duplicate skills
+
+        detected_skills = list(
+
+            dict.fromkeys(
+
+                detected_skills
+
+            )
+
+        )
+
+        # 9. MISSING SKILLS
+
+        missing_skills = ensure_list(
+
+            ai_data.get(
+
+                "missing_skills",
+
+                []
+
+            )
+
+        )
+
+        # 10. CAREER RECOMMENDATIONS
+
+        recommended_careers = ensure_list(
+
+            ai_data.get(
+
+                "recommended_careers",
+
+                []
+
+            )
+
+        )
+
+
+        # 11. PRIMARY CAREER
+
+        primary_career = (
+
+            "Career Recommendation"
+
+        )
+
+
+        if recommended_careers:
+
+            first_career = (
+
+                recommended_careers[0]
+
+            )
+
+
+            if isinstance(
+
+                first_career,
+
+                dict
+
+            ):
+
+                primary_career = (
+
+                    first_career.get(
+
+                        "role",
+
+                        "Career Recommendation"
+
+                    )
+
+                )
+
+
             else:
-                local_match = match_resume_with_job(detected_skills, job_description)
-                raw_matches = ensure_list(local_match.get("matched_skills", []))
-                raw_misses = ensure_list(local_match.get("missing_skills", []))
-                
-                matched_skills = [s for s in detected_skills if s.lower().strip() in [m.lower().strip() for m in raw_matches]]
-                missing_job_skills = [s for s in raw_misses if s.lower().strip() not in detected_skills_lower]
-                
-                total = len(matched_skills) + len(missing_job_skills)
-                match_score = int((len(matched_skills) / total) * 100) if total > 0 else 70
-        else:
-            matched_skills = detected_skills
-            # Explicit dynamic target gap identification to populate the block
-            missing_job_skills = ["REST API Design", "Docker", "AWS Deployment", "System Design (LLD/HLD)"]
-            missing_job_skills = [s for s in missing_job_skills if s.lower().strip() not in detected_skills_lower]
-            match_score = 100 - (len(missing_job_skills) * 10)
 
-        # 4. ATS Normalization Metrics Configuration
-        general_missing_skills = ["REST APIs", "Docker", "Cloud Platforms (AWS/GCP)"]
-        general_missing_skills = [s for s in general_missing_skills if s.lower().strip() not in detected_skills_lower]
-        
-        ats_score = calculate_ats_score(detected_skills, general_missing_skills)
-        if ats_score > 90 and len(general_missing_skills) > 0:
-            ats_score = 82 
+                primary_career = str(
 
-        feedback = generate_feedback(detected_skills, general_missing_skills, ats_score)
-        
-        # FIX: Removed hardcoded numbers from the strings to prevent double numbering on frontend
-        roadmap = [
-            "Deepen Python & Asynchronous Patterns",
-            "Master Core Django Rest Framework Architecture",
-            "Learn Containerization with Docker",
-            "Understand Scalable Database Optimization",
-            "Build Cloud Backend Native Deployments"
-        ]
-        
-        jobs = recommend_jobs(career) or ["Backend Developer - TCS", "Python Developer - Infosys", "Software Engineer - Accenture"]
-        courses = [{"skill": "System Design", "course": "https://www.coursera.org"}, {"skill": "Docker & AWS", "course": "https://www.udemy.com"}]
-        
-        tips = [
-            "Incorporate quantitative metrics (e.g., 'Optimized query latency by 30%') in project blocks.",
-            "Ensure clickable professional links (GitHub, LinkedIn) are explicitly configured in the header."
-        ]
-        
-        rewritten_text = rewrite_resume(detected_skills, general_missing_skills)
+                    first_career
+
+                )
+
+
+        # 12. ATS ANALYSIS
+
+        ats_analysis = ai_data.get(
+
+            "ats_analysis",
+
+            {}
+
+        )
+
+
+        ats_score = ats_analysis.get(
+
+            "score",
+
+            0
+
+        )
+
+
+        # Make sure score is valid
+
+        try:
+
+            ats_score = int(
+
+                ats_score
+
+            )
+
+        except (
+
+            ValueError,
+
+            TypeError
+
+        ):
+
+            ats_score = 0
+
+
+        # Keep score between 0 and 100
+
+        ats_score = max(
+
+            0,
+
+            min(
+
+                ats_score,
+
+                100
+
+            )
+
+        )
+
+
+        ats_strengths = ensure_list(
+
+            ats_analysis.get(
+
+                "strengths",
+
+                []
+
+            )
+
+        )
+
+
+        ats_weaknesses = ensure_list(
+
+            ats_analysis.get(
+
+                "weaknesses",
+
+                []
+
+            )
+
+        )
+
+
+        # 13. ROADMAP
+
+        roadmap = ensure_list(
+
+            ai_data.get(
+
+                "roadmap",
+
+                []
+
+            )
+
+        )
+
+
+        # 14. RECOMMENDED COURSES
+
+        recommended_learning_skills = (
+
+            ensure_list(
+
+                ai_data.get(
+
+                    "recommended_learning_skills",
+
+                    []
+
+                )
+
+            )
+
+        )
+
+
+        if not recommended_learning_skills:
+
+            recommended_learning_skills = (
+
+                missing_skills
+
+            )
+
+
+        courses = recommend_courses(
+
+            recommended_learning_skills
+
+        )
+
+
+        # 15. RECOMMENDED JOBS
+
+        jobs = recommend_jobs(
+
+            primary_career
+
+        )
+
+
+        # 16. IMPROVEMENT SUGGESTIONS
+
+        improvement_suggestions = (
+
+            ensure_list(
+
+                ai_data.get(
+
+                    "improvement_suggestions",
+
+                    []
+
+                )
+
+            )
+
+        )
+
+
+        # 17. SAVE AI ANALYSIS IN DATABASE
+
+        profile.resume_summary = (
+
+            resume_summary
+
+        )
+
+
+        profile.detected_skills = (
+
+            detected_skills
+
+        )
+
+
+        profile.missing_skills = (
+
+            missing_skills
+
+        )
+
+
+        profile.recommended_careers = (
+
+            recommended_careers
+
+        )
+
+
+        profile.roadmap = (
+
+            roadmap
+
+        )
+
+
+        profile.recommended_courses = (
+
+            courses
+
+        )
+
+
+        profile.recommended_jobs = (
+
+            jobs
+
+        )
+
+
+        profile.improvement_suggestions = (
+
+            improvement_suggestions
+
+        )
+
+
+        profile.ats_score = (
+
+            ats_score
+
+        )
+
+
+        profile.save()
+
+
+        # 18. RESULT PAGE CONTEXT
 
         context = {
-            "name": name,
-            "skills": detected_skills,
-            "career": career,
-            "roadmap": roadmap,
-            "ats_score": ats_score,
-            "tips": tips,
-            "jobs": jobs,
-            "courses": courses,
-            "feedback": feedback,
-            "rewritten": rewritten_text,
-            "matched_skills": matched_skills,
-            "missing_job_skills": missing_job_skills, # Bound directly to the dashboard loop container
-            "match_score": float(match_score),
-            "missing_skills": general_missing_skills,
-        }
-        return render(request, "result.html", context)
 
-    return render(request, "upload.html")
+            "name": name,
+
+            "email": email,
+
+            "summary": resume_summary,
+
+            "skills": detected_skills,
+
+            "career": primary_career,
+
+            "recommended_careers": (
+
+                recommended_careers
+
+            ),
+
+            "missing_skills": (
+
+                missing_skills
+
+            ),
+
+            "ats_score": ats_score,
+
+            "ats_strengths": (
+
+                ats_strengths
+
+            ),
+
+            "ats_weaknesses": (
+
+                ats_weaknesses
+
+            ),
+
+            "roadmap": roadmap,
+
+            "courses": courses,
+
+            "jobs": jobs,
+
+            "tips": (
+
+                improvement_suggestions
+
+            ),
+
+            "feedback": (
+
+                improvement_suggestions
+
+            ),
+
+            "matched_skills": (
+
+                detected_skills
+
+            ),
+
+            "missing_job_skills": (
+
+                missing_skills
+
+            ),
+
+            "match_score": ats_score,
+
+            "candidate_profile": (
+
+                candidate_profile
+
+            ),
+
+        }
+
+
+        # 19. SHOW RESULT PAGE
+
+        return render(
+
+            request,
+
+            "result.html",
+
+            context
+
+        )
+
+
+    # GET REQUEST
+
+    return render(
+
+        request,
+
+        "upload.html"
+
+    )
+
+
+# HISTORY
 
 @login_required
 def history(request):
-    profiles = UserProfile.objects.filter(user=request.user).order_by('-id')
-    return render(request, "history.html", {"profiles": profiles})
+
+    profiles = (
+
+        UserProfile.objects.filter(
+
+            user=request.user
+
+        )
+
+        .order_by(
+
+            "-created_at"
+
+        )
+
+    )
+
+
+    return render(
+
+        request,
+
+        "history.html",
+
+        {
+
+            "profiles": profiles
+
+        }
+
+    )
+
+
+# VIEW OLD ANALYSIS
+
+@login_required
+def view_analysis(
+
+    request,
+
+    profile_id
+
+):
+
+    profile = get_object_or_404(
+
+        UserProfile,
+
+        id=profile_id,
+
+        user=request.user
+
+    )
+
+
+    recommended_careers = (
+
+        profile.recommended_careers
+
+    )
+
+
+    primary_career = (
+
+        "Career Recommendation"
+
+    )
+
+
+    if recommended_careers:
+
+        first_career = (
+
+            recommended_careers[0]
+
+        )
+
+
+        if isinstance(
+
+            first_career,
+
+            dict
+
+        ):
+
+            primary_career = (
+
+                first_career.get(
+
+                    "role",
+
+                    "Career Recommendation"
+
+                )
+
+            )
+
+
+        else:
+
+            primary_career = str(
+
+                first_career
+
+            )
+
+
+    # for Old database records 
+    # if jobs/courses is empty 
+
+    courses = (
+
+        profile.recommended_courses
+
+    )
+
+
+    if not courses:
+
+        courses = recommend_courses(
+
+            profile.missing_skills
+
+        )
+
+
+    jobs = (
+
+        profile.recommended_jobs
+
+    )
+
+
+    if not jobs:
+
+        jobs = recommend_jobs(
+
+            primary_career
+
+        )
+
+
+    context = {
+
+        "name": profile.name,
+
+        "email": profile.email,
+
+        "summary": profile.resume_summary,
+
+        "skills": profile.detected_skills,
+
+        "career": primary_career,
+
+        "recommended_careers": (
+
+            profile.recommended_careers
+
+        ),
+
+        "missing_skills": (
+
+            profile.missing_skills
+
+        ),
+
+        "ats_score": profile.ats_score,
+
+        "roadmap": profile.roadmap,
+
+        "courses": courses,
+
+        "jobs": jobs,
+
+        "tips": (
+
+            profile.improvement_suggestions
+
+        ),
+
+        "feedback": (
+
+            profile.improvement_suggestions
+
+        ),
+
+        "matched_skills": (
+
+            profile.detected_skills
+
+        ),
+
+        "missing_job_skills": (
+
+            profile.missing_skills
+
+        ),
+
+        "match_score": (
+
+            profile.ats_score
+
+        ),
+
+    }
+
+
+    return render(
+
+        request,
+
+        "result.html",
+
+        context
+
+    )
+
+
+# DOWNLOAD PDF REPORT
 
 @login_required
 def download_report(request):
-    response = HttpResponse(content_type='application/pdf')
-    response['Content-Disposition'] = 'attachment; filename="resume_report.pdf"'
-    p = canvas.Canvas(response)
-    p.drawString(100, 800, "AI Resume Analysis Report")
-    p.drawString(100, 760, f"Name: {request.GET.get('name', '')}")
-    p.drawString(100, 740, f"Career: {request.GET.get('career', '')}")
-    p.showPage()
-    p.save()
+
+    response = HttpResponse(
+
+        content_type="application/pdf"
+
+    )
+
+
+    response[
+
+        "Content-Disposition"
+
+    ] = (
+
+        'attachment; '
+
+        'filename="resume_report.pdf"'
+
+    )
+
+
+    pdf = canvas.Canvas(
+
+        response
+
+    )
+
+
+    pdf.drawString(
+
+        100,
+
+        800,
+
+        "AI Resume Analysis Report"
+
+    )
+
+
+    pdf.drawString(
+
+        100,
+
+        760,
+
+        f"Name: "
+
+        f"{request.GET.get('name', '')}"
+
+    )
+
+
+    pdf.drawString(
+
+        100,
+
+        740,
+
+        f"Career: "
+
+        f"{request.GET.get('career', '')}"
+
+    )
+
+
+    pdf.drawString(
+
+        100,
+
+        720,
+
+        f"ATS Score: "
+
+        f"{request.GET.get('ats_score', '')}"
+
+    )
+
+
+    pdf.showPage()
+
+
+    pdf.save()
+
+
     return response
 
+
+# SIGNUP
+
 def signup(request):
+
     if request.method == "POST":
-        username = request.POST.get("username")
-        email = request.POST.get("email")
-        password = request.POST.get("password")
 
-        if User.objects.filter(username=username).exists():
-            return render(request, "signup.html", {"error": "Username already exists"})
+        username = request.POST.get(
 
-        User.objects.create_user(username=username, email=email, password=password)
-        return redirect("login")
+            "username",
 
-    return render(request, "signup.html")
+            ""
+
+        ).strip()
+
+
+        email = request.POST.get(
+
+            "email",
+
+            ""
+
+        ).strip()
+
+
+        password = request.POST.get(
+
+            "password",
+
+            ""
+
+        )
+
+
+        if User.objects.filter(
+
+            username=username
+
+        ).exists():
+
+            return render(
+
+                request,
+
+                "signup.html",
+
+                {
+
+                    "error":
+
+                    "Username already exists."
+
+                }
+
+            )
+
+
+        User.objects.create_user(
+
+            username=username,
+
+            email=email,
+
+            password=password
+
+        )
+
+
+        return redirect(
+
+            "login"
+
+        )
+
+
+    return render(
+
+        request,
+
+        "signup.html"
+
+    )

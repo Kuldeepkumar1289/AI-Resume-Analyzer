@@ -1,62 +1,326 @@
+# engine/job_recommender.py
+
+
 job_data = {
+
     "backend developer": [
-        "Backend Developer – TCS",
-        "Python Developer – Infosys",
-        "Django Developer – Wipro",
-        "Software Engineer – Accenture",
-        "Python Backend Engineer – Cognizant"
+
+        {
+            "title": "Backend Developer",
+            "company": "TCS",
+            "skills": [
+                "Python",
+                "Django",
+                "REST API",
+                "SQL"
+            ]
+        },
+
+        {
+            "title": "Python Developer",
+            "company": "Infosys",
+            "skills": [
+                "Python",
+                "Django",
+                "SQL"
+            ]
+        },
+
+        {
+            "title": "Django Developer",
+            "company": "Wipro",
+            "skills": [
+                "Python",
+                "Django",
+                "REST API"
+            ]
+        },
+
+        {
+            "title": "Software Engineer",
+            "company": "Accenture",
+            "skills": [
+                "Python",
+                "SQL",
+                "Git"
+            ]
+        },
+
+        {
+            "title": "Python Backend Engineer",
+            "company": "Cognizant",
+            "skills": [
+                "Python",
+                "Django",
+                "REST API",
+                "SQL"
+            ]
+        }
+
     ],
+
 
     "frontend developer": [
-        "React Developer – HCL",
-        "Frontend Engineer – Cognizant",
-        "UI Developer – Tech Mahindra",
-        "Web Developer – Infosys"
+
+        {
+            "title": "React Developer",
+            "company": "HCL",
+            "skills": [
+                "HTML",
+                "CSS",
+                "JavaScript",
+                "React"
+            ]
+        },
+
+        {
+            "title": "Frontend Engineer",
+            "company": "Cognizant",
+            "skills": [
+                "JavaScript",
+                "React",
+                "HTML",
+                "CSS"
+            ]
+        },
+
+        {
+            "title": "UI Developer",
+            "company": "Tech Mahindra",
+            "skills": [
+                "HTML",
+                "CSS",
+                "JavaScript"
+            ]
+        },
+
+        {
+            "title": "Web Developer",
+            "company": "Infosys",
+            "skills": [
+                "HTML",
+                "CSS",
+                "JavaScript"
+            ]
+        }
+
     ],
+
 
     "data scientist": [
-        "Data Analyst – Deloitte",
-        "Machine Learning Engineer – IBM",
-        "Data Scientist – Capgemini",
-        "AI Engineer – Accenture"
+
+        {
+            "title": "Data Scientist",
+            "company": "Capgemini",
+            "skills": [
+                "Python",
+                "Machine Learning",
+                "SQL"
+            ]
+        },
+
+        {
+            "title": "Machine Learning Engineer",
+            "company": "IBM",
+            "skills": [
+                "Python",
+                "Machine Learning",
+                "Data Science"
+            ]
+        },
+
+        {
+            "title": "AI Engineer",
+            "company": "Accenture",
+            "skills": [
+                "Python",
+                "Machine Learning",
+                "Artificial Intelligence"
+            ]
+        }
+
     ],
+
 
     "full stack developer": [
-        "Full Stack Developer – TCS",
-        "Software Engineer – Infosys",
-        "MERN Stack Developer – Wipro",
-        "Python Full Stack Developer – Cognizant"
-    ],   # ✅ comma
 
-    "data analyst": [
-        "Data Analyst – Deloitte",
-        "Business Analyst – EY",
-        "SQL Developer – Infosys",
-        "BI Analyst – Capgemini"
+        {
+            "title": "Full Stack Developer",
+            "company": "TCS",
+            "skills": [
+                "HTML",
+                "CSS",
+                "JavaScript",
+                "React",
+                "Python",
+                "Django"
+            ]
+        },
+
+        {
+            "title": "Software Engineer",
+            "company": "Infosys",
+            "skills": [
+                "JavaScript",
+                "React",
+                "Python",
+                "SQL"
+            ]
+        },
+
+        {
+            "title": "Python Full Stack Developer",
+            "company": "Cognizant",
+            "skills": [
+                "Python",
+                "Django",
+                "React",
+                "SQL"
+            ]
+        },
+
+        {
+            "title": "MERN Stack Developer",
+            "company": "Wipro",
+            "skills": [
+                "MongoDB",
+                "Express",
+                "React",
+                "Node.js"
+            ]
+        }
+
     ],
 
+
+    "data analyst": [
+
+        {
+            "title": "Data Analyst",
+            "company": "Deloitte",
+            "skills": [
+                "SQL",
+                "Excel",
+                "Python",
+                "Data Analysis"
+            ]
+        },
+
+        {
+            "title": "Business Analyst",
+            "company": "EY",
+            "skills": [
+                "SQL",
+                "Data Analysis",
+                "Excel"
+            ]
+        },
+
+        {
+            "title": "BI Analyst",
+            "company": "Capgemini",
+            "skills": [
+                "SQL",
+                "Data Visualization",
+                "Power BI"
+            ]
+        }
+
+    ],
+
+
     "software developer": [
-        "Software Developer – TCS",
-        "Software Engineer – Infosys",
-        "Associate Software Engineer – Accenture",
-        "Programmer Analyst – Cognizant"
+
+        {
+            "title": "Software Developer",
+            "company": "TCS",
+            "skills": [
+                "Programming",
+                "SQL",
+                "Git"
+            ]
+        },
+
+        {
+            "title": "Software Engineer",
+            "company": "Infosys",
+            "skills": [
+                "Programming",
+                "SQL",
+                "Problem Solving"
+            ]
+        },
+
+        {
+            "title": "Associate Software Engineer",
+            "company": "Accenture",
+            "skills": [
+                "Programming",
+                "Git",
+                "SQL"
+            ]
+        },
+
+        {
+            "title": "Programmer Analyst",
+            "company": "Cognizant",
+            "skills": [
+                "Programming",
+                "SQL",
+                "Problem Solving"
+            ]
+        }
+
     ]
+
 }
 
 
 def recommend_jobs(career):
+
     if not career:
+
         return [
-            "Software Engineer – TCS",
-            "Python Developer – Infosys",
-            "Web Developer – Wipro"
+
+            {
+                "title": "Software Engineer",
+                "company": "TCS",
+                "skills": [
+                    "Programming",
+                    "SQL",
+                    "Git"
+                ]
+            }
+
         ]
 
+    career = career.lower().strip()
+
     return job_data.get(
-        career.lower(),
+
+        career,
+
         [
-            "Software Engineer – TCS",
-            "Python Developer – Infosys",
-            "Web Developer – Wipro"
+
+            {
+                "title": "Software Engineer",
+                "company": "TCS",
+                "skills": [
+                    "Programming",
+                    "SQL",
+                    "Git"
+                ]
+            },
+
+            {
+                "title": "Software Developer",
+                "company": "Infosys",
+                "skills": [
+                    "Programming",
+                    "SQL"
+                ]
+            }
+
         ]
+
     )

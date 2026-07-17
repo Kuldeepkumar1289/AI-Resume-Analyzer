@@ -2,7 +2,14 @@ from django.contrib import admin
 from django.urls import path
 from django.contrib.auth import views as auth_views
 from django.views.generic import RedirectView
-from engine.views import upload_resume, download_report, history, signup
+
+from engine.views import (
+    upload_resume,
+    download_report,
+    history,
+    signup,
+    view_analysis
+)
 
 urlpatterns = [
     path('admin/', admin.site.urls),
@@ -17,4 +24,5 @@ urlpatterns = [
     path('upload/', upload_resume, name='upload'),
     path('history/', history, name='history'),
     path('download-report/', download_report, name='download_report'),
+    path("analysis/<int:profile_id>/",view_analysis,name="view_analysis"),
 ]
